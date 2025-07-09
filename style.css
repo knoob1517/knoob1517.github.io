@@ -68,3 +68,9 @@ button:hover {
   gap: 1rem; /* space between buttons */
   margin: 1.5rem 0;
 }
+
+#note {
+  font-size: 0.9em;
+  color: gray;
+  text-align: center;
+}
