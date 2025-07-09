@@ -1,47 +1,33 @@
-/* reset + base */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 body {
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #0f1117;
-  color: #f0f0f0;
-  padding: 40px;
-  line-height: 1.6;
+  background-color: #111;
+  color: #fff;
+  font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+  padding: 20px;
 }
 
-/* headers */
 h1 {
-  font-size: 2.5rem;
-  margin-bottom: 10px;
-  color: #00ffcc;
+  font-size: 24px;
+  color: rgb(255, 255, 255);
 }
 
 h2 {
-  font-size: 1.4rem;
-  margin-top: 30px;
-  color: #ffcc00;
+  font-size: 18px;
+  margin-top: 20px;
+  color: rgb(255, 255, 255);
 }
 
-/* link styling */
 a {
-  color: #00b3ff;
+  color: #0cf;
   text-decoration: none;
-  font-weight: bold;
 }
 
 a:hover {
   text-decoration: underline;
 }
 
-/* horizontal rule */
 hr {
-  margin: 20px 0;
   border: none;
-  height: 2px;
-  background: linear-gradient(to right, #00ffcc, #ff00cc);
-  border-radius: 10px;
+  height: 1px;
+  background-color: #444;
+  margin: 10px 0;
 }
