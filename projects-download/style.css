@@ -1,0 +1,14 @@
+body {
+    background-color: rgb(59, 59, 59);
+    color: white;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+a {
+    color: rgb(109, 121, 121);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: solid underline;
+}
