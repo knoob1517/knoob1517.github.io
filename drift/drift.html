@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>three.js drifting donut demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html,body { height:100%; margin:0; font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial; background:#0b1020; color:#e6eef8; }
+    #container { width:100%; height:100%; display:flex; flex-direction:column; }
+    #canvas-wrap { flex:1; position:relative; }
+    canvas { display:block; }
+    .hud {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      background: rgba(6,10,20,0.55);
+      padding:10px 12px;
+      border-radius:8px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+      font-size:13px;
+      line-height:1.3;
+      min-width:170px;
+    }
+    .controls {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      margin:10px;
+    }
+    .controls input[type=range]{ width:160px; }
+    .footer {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:8px 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.04));
+      border-top:1px solid rgba(255,255,255,0.03);
+      font-size:13px;
+      color:#cfe6ff;
+    }
+    button { background:#1a73e8; border:none; color:white; padding:6px 10px; border-radius:6px; cursor:pointer; }
+    button.secondary { background:#2d3748; }
+    label { font-size:13px; margin-right:6px; }
+    .small { font-size:12px; color:#bcd3ff; }
+    a { color:#aee0ff; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="canvas-wrap">
+      <div id="hud" class="hud">
+        <div style="font-weight:600; margin-bottom:6px">drift donut — three.js demo</div>
+        <div id="stats">
+          speed: <span id="stat-speed">0.0</span> m/s<br/>
+          heading: <span id="stat-heading">0.0</span>°<br/>
+          steering: <span id="stat-steer">0.0</span>°<br/>
+          slip: <span id="stat-slip">0.00</span>
+        </div>
+        <div style="height:8px"></div>
+        <div class="controls">
+          <button id="startBtn">start</button>
+          <button id="stopBtn" class="secondary">stop</button>
+          <button id="resetBtn" class="secondary">reset</button>
+        </div>
+        <div style="height:8px"></div>
+        <div>
+          <label class="small">throttle</label><input id="throttle" type="range" min="0" max="20" step="0.1" value="8">
+        </div>
+        <div>
+          <label class="small">steering (deg)</label><input id="steer" type="range" min="-45" max="45" step="0.5" value="18">
+        </div>
+        <div>
+          <label class="small">slip (0..1)</label><input id="slip" type="range" min="0" max="1" step="0.01" value="0.52">
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <div>built with <a href="https://threejs.org" target="_blank" rel="noreferrer">three.js</a> — simple drift physics</div>
+      <div class="small">save as drift-donut.html · open in browser</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.158.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.158.0/examples/jsm/controls/OrbitControls.js';
+
+    // ---------- scene setup ----------
+    const canvasWrap = document.getElementById('canvas-wrap');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1020);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera.position.set(0, 8, 14);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    canvasWrap.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.enablePan = true;
+    controls.dampingFactor = 0.07;
+    controls.minDistance = 5;
+    controls.maxDistance = 60;
+
+    window.addEventListener('resize', onResize);
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // ---------- lights ----------
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(5, 10, 7);
+    scene.add(dir);
+
+    // ---------- ground ----------
+    const groundGeo = new THREE.PlaneGeometry(400, 400);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1b2434, metalness: 0.0, roughness: 0.9 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // simple textured grid for visual cue
+    const grid = new THREE.GridHelper(200, 40, 0x203040, 0x14202a);
+    grid.position.y = 0.002;
+    scene.add(grid);
+
+    // ---------- car model ----------
+    function createCarModel() {
+      const car = new THREE.Group();
+
+      // body
+      const bodyGeo = new THREE.BoxGeometry(2.4, 0.5, 1.2);
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe84a4a, metalness: 0.2, roughness: 0.4 });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.set(0, 0.45, 0);
+      body.castShadow = true;
+      car.add(body);
+
+      // cabin
+      const cabinGeo = new THREE.BoxGeometry(1.1, 0.35, 0.9);
+      const cabinMat = new THREE.MeshStandardMaterial({ color: 0x112233, metalness: 0.0, roughness: 0.2, opacity: 0.9, transparent: true });
+      const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+      cabin.position.set(-0.15, 0.7, 0);
+      car.add(cabin);
+
+      // wheels
+      const wheelGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.12, 16);
+      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.2, roughness: 0.6 });
+      const wheelPositions = [
+        [0.9, 0.22, -0.55],  // fr
+        [0.9, 0.22,  0.55],  // fl
+        [-0.9, 0.22, -0.55], // rr
+        [-0.9, 0.22,  0.55]  // rl
+      ];
+      const wheels = [];
+      wheelPositions.forEach((pos, idx) => {
+        const w = new THREE.Mesh(wheelGeo, wheelMat);
+        w.rotation.z = Math.PI / 2;
+        w.position.set(pos[0], pos[1], pos[2]);
+        w.castShadow = true;
+        car.add(w);
+        wheels.push(w);
+      });
+
+      // add a small marker to know front direction
+      const marker = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.6), new THREE.MeshStandardMaterial({ color: 0xffff00 }));
+      marker.position.set(1.25, 0.5, 0);
+      car.add(marker);
+
+      return { root: car, components: { body, wheels, marker } };
+    }
+
+    const carObj = createCarModel();
+    scene.add(carObj.root);
+
+    // ---------- camera follow target ----------
+    const cameraPivot = new THREE.Object3D();
+    scene.add(cameraPivot);
+
+    // ---------- simplified car physics (kinematic + slip) ----------
+    const car = {
+      position: new THREE.Vector2(6, 0), // x,z plane (using z as y in 2D)
+      heading: Math.PI * 0.5, // radians, 0 along +x
+      speed: 0, // forward speed (m/s)
+      wheelBase: 2.4, // meters (approx)
+      steeringAngle: THREE.MathUtils.degToRad(18),
+      slipFactor: 0.55,
+      engineForce: 8,
+      maxSteer: THREE.MathUtils.degToRad(45),
+      yawRate: 0
+    };
+
+    // initial placement
+    updateCarMeshFromState();
+
+    // ---------- controls & UI ----------
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    const throttleInput = document.getElementById('throttle');
+    const steerInput = document.getElementById('steer');
+    const slipInput = document.getElementById('slip');
+
+    startBtn.onclick = () => running = true;
+    stopBtn.onclick = () => running = false;
+    resetBtn.onclick = () => {
+      running = false;
+      car.position.set(6, 0);
+      car.heading = Math.PI * 0.5;
+      car.speed = 0;
+      updateCarMeshFromState();
+    };
+
+    throttleInput.oninput = () => car.engineForce = parseFloat(throttleInput.value);
+    steerInput.oninput = () => car.steeringAngle = THREE.MathUtils.degToRad(parseFloat(steerInput.value));
+    slipInput.oninput = () => car.slipFactor = parseFloat(slipInput.value);
+
+    // stats elements
+    const statSpeed = document.getElementById('stat-speed');
+    const statHeading = document.getElementById('stat-heading');
+    const statSteer = document.getElementById('stat-steer');
+    const statSlip = document.getElementById('stat-slip');
+
+    // ---------- simulation loop ----------
+    let last = performance.now();
+    let running = false;
+
+    function stepSimulation(dt) {
+      // dt in seconds
+      // simple longitudinal: car.speed -> approach engineForce with simple acceleration model
+      const accel = car.engineForce - 1.5 * car.speed; // simple drag to stabilize
+      car.speed += accel * dt;
+      if (car.speed < 0) car.speed = 0;
+
+      // kinematic bicycle-like yaw rate: r = v/L * tan(delta)
+      const r = car.speed / car.wheelBase * Math.tan(car.steeringAngle);
+      car.yawRate = r;
+
+      // slip lateral speed approximation: lateralSpeed ~= slipFactor * v * sin(steering)
+      const lateralSpeed = car.slipFactor * car.speed * Math.sin(car.steeringAngle);
+
+      // update heading (yaw)
+      car.heading += r * dt;
+
+      // world velocities (heading is direction of car's forward axis)
+      const vx = car.speed * Math.cos(car.heading);
+      const vz = car.speed * Math.sin(car.heading);
+
+      // add sideways movement (drift) perpendicular to heading
+      const vx_world = vx - lateralSpeed * Math.sin(car.heading);
+      const vz_world = vz + lateralSpeed * Math.cos(car.heading);
+
+      car.position.x += vx_world * dt;
+      car.position.y += vz_world * dt;
+    }
+
+    function updateCarMeshFromState() {
+      // place car model in world, mapping 2D pos (x,z) to three.js (x,y,z)
+      carObj.root.position.set(car.position.x, 0.01 + 0.45, car.position.y);
+      // rotation: align with heading
+      carObj.root.rotation.y = -car.heading + Math.PI / 2; // adjust because model faces +x
+      // compute drift angle for visual slip tilt: atan2(lateral, forward)
+      const lateralSpeed = car.slipFactor * car.speed * Math.sin(car.steeringAngle);
+      const driftAngle = Math.atan2(lateralSpeed, Math.max(0.0001, car.speed));
+      // tilt body a bit to emphasize drift
+      carObj.components.body.rotation.z = driftAngle * 0.35;
+      // rotate wheels: front wheels steer
+      const steerDeg = car.steeringAngle;
+      // wheels indexes: 0 fr,1 fl,2 rr,3 rl
+      carObj.components.wheels[0].rotation.y = -steerDeg; // fr
+      carObj.components.wheels[1].rotation.y = -steerDeg; // fl
+      // rotate wheels spin based on forward speed
+      const wheelCirc = 2 * Math.PI * 0.22;
+      const spin = (car.speed / wheelCirc) * 2 * Math.PI;
+      carObj.components.wheels.forEach(w => { w.rotation.x = spin; });
+
+      // update camera pivot for follow
+      cameraPivot.position.set(car.position.x, 0.5 + 0.45, car.position.y);
+    }
+
+    // ---------- camera follow / cinematic ----------
+    function updateCamera(dt) {
+      // smooth follow: place cameraPivot behind car
+      const followDist = THREE.MathUtils.lerp(0.5, 6.0, Math.min(1, car.speed / 12));
+      const offset = new THREE.Vector3(-followDist, 2.2 + car.speed * 0.06, 0);
+      // rotate offset by car heading
+      const cos = Math.cos(car.heading);
+      const sin = Math.sin(car.heading);
+      const worldOffset = new THREE.Vector3(
+        offset.x * cos - offset.z * sin,
+        offset.y,
+        offset.x * sin + offset.z * cos
+      );
+      const desiredCamPos = new THREE.Vector3(car.position.x, 0, car.position.y).add(worldOffset);
+      camera.position.lerp(desiredCamPos, 0.08);
+      // look at car
+      const lookAtPos = new THREE.Vector3(car.position.x, 0.6 + 0.45, car.position.y);
+      camera.lookAt(lookAtPos);
+    }
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+
+      if (running) {
+        stepSimulation(dt);
+      } else {
+        // even if not running, we keep a tiny idle drift for look
+        stepSimulation(dt * 0.0);
+      }
+
+      updateCarMeshFromState();
+      updateCamera(dt);
+
+      controls.update();
+      renderer.render(scene, camera);
+
+      // update stats text
+      statSpeed.innerText = car.speed.toFixed(2);
+      statHeading.innerText = THREE.MathUtils.radToDeg(car.heading % (Math.PI*2)).toFixed(1);
+      statSteer.innerText = THREE.MathUtils.radToDeg(car.steeringAngle).toFixed(1);
+      statSlip.innerText = car.slipFactor.toFixed(2);
+    }
+
+    // ---------- helper: setup an initial donut controller (auto steering to keep rough circular path) ----------
+    // for an automatic donut: keep steering constant (user can set via GUI)
+    // optionally we could rotate steering slowly to create more theatrical drift; leave control to user.
+
+    // ---------- startup ----------
+    last = performance.now();
+    animate(last);
+
+    // instructions: start with "start" button. tweak throttle, steering, slip.
+    // you can also use orbit controls to get a side or top view.
+
+    // small keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.key === ' ') { running = !running; }
+      if (e.key === 'r') { resetBtn.click(); }
+      if (e.key === 'ArrowUp') { throttleInput.value = Math.min(20, parseFloat(throttleInput.value) + 0.5); throttleInput.oninput(); }
+      if (e.key === 'ArrowDown') { throttleInput.value = Math.max(0, parseFloat(throttleInput.value) - 0.5); throttleInput.oninput(); }
+    });
+
+    // place camera nicely on start
+    camera.position.set(car.position.x - 8, 6, car.position.y + 8);
+    camera.lookAt(car.position.x, 0.5, car.position.y);
+
+    // expose for debugging (optional)
+    window._car = car;
+    window._scene = scene;
+  </script>
+</body>
+</html>
