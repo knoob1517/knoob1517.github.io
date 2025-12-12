@@ -295,22 +295,8 @@
 
     // ---------- camera follow / cinematic ----------
     function updateCamera(dt) {
-      // smooth follow: place cameraPivot behind car
-      const followDist = THREE.MathUtils.lerp(0.5, 6.0, Math.min(1, car.speed / 12));
-      const offset = new THREE.Vector3(-followDist, 2.2 + car.speed * 0.06, 0);
-      // rotate offset by car heading
-      const cos = Math.cos(car.heading);
-      const sin = Math.sin(car.heading);
-      const worldOffset = new THREE.Vector3(
-        offset.x * cos - offset.z * sin,
-        offset.y,
-        offset.x * sin + offset.z * cos
-      );
-      const desiredCamPos = new THREE.Vector3(car.position.x, 0, car.position.y).add(worldOffset);
-      camera.position.lerp(desiredCamPos, 0.08);
-      // look at car
-      const lookAtPos = new THREE.Vector3(car.position.x, 0.6 + 0.45, car.position.y);
-      camera.lookAt(lookAtPos);
+      // never, ever change the pos of the camera.
+      // this was made for fun :D
     }
 
     function animate(now) {
@@ -367,5 +353,6 @@
   </script>
 </body>
 </html>
+
 
 
